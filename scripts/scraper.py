@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import os
 import csv
 import io
+import re
+from urllib.parse import urljoin
 
 # Target dataset: Government Office Calendar (ID: 14718)
 DATASET_URL = "https://data.gov.tw/dataset/14718"
@@ -27,55 +29,72 @@ def scrape_data():
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Dictionary to store found links per year to avoid duplicates
+        # Dictionary to store found links per year
         # Key: Year (int), Value: URL (str)
         year_to_link = {}
 
-        # Scan for all CSV links
+        # Scan for all potential resource links
+        # Looking into all links and specifically checking titles/text
         for a_tag in soup.find_all('a', href=True):
             href = a_tag.get('href', '')
-            title = (a_tag.get('title', '') + a_tag.get_text()).strip()
+            # Combine title and text to find year info
+            label = (a_tag.get('title', '') + " " + a_tag.get_text()).strip()
             
-            if 'csv' in href.lower() or 'csv' in title.lower():
-                # Extract ROC year from title using regex
-                match = re.search(r'(\d{3})', title)
+            # Filter for CSV resources within our year range
+            if 'csv' in href.lower() or 'csv' in label.lower():
+                # Extract 3-digit ROC year (e.g., 106, 114)
+                match = re.search(r'(\d{3})', label)
                 if match:
                     roc_year = int(match.group(1))
                     if START_YEAR_ROC <= roc_year <= END_YEAR_ROC:
-                        year_to_link[roc_year] = href
+                        # Fix relative URLs
+                        full_url = urljoin(DATASET_URL, href)
+                        year_to_link[roc_year] = full_url
 
         if not year_to_link:
-            print("No matching CSV resources found for the specified ROC years.")
-            # Fallback: just try to get the primary one if no year labels found
+            print("No matching CSV resources found. The website structure might have changed.")
             return
 
-        print(f"Found resources for years: {sorted(year_to_link.keys())}")
+        sorted_years = sorted(year_to_link.keys())
+        print(f"Discovered resources for ROC years: {sorted_years}")
 
         merged_data = []
         header = None
 
-        # Download and merge each file
-        for year in sorted(year_to_link.keys()):
+        for year in sorted_years:
             link = year_to_link[year]
-            print(f"Fetching data for year {year}...")
+            print(f"Downloading year {year} from: {link}")
             
-            file_res = requests.get(link, headers=headers)
-            file_res.encoding = 'utf-8-sig' # Handle BOM
-            
-            # Use csv module to parse content
-            f = io.StringIO(file_res.text)
-            reader = csv.reader(f)
-            rows = list(reader)
-            
-            if not rows:
-                continue
+            try:
+                file_res = requests.get(link, headers=headers, timeout=30)
+                file_res.raise_for_status()
                 
-            if header is None:
-                header = rows[0]
-                merged_data.append(header)
-            
-            # Append data rows (skipping header of subsequent files)
-            merged_data.extend(rows[1:])
+                # Handle potential encoding issues (UTF-8 with BOM is common in Taiwan Gov Data)
+                content = file_res.content.decode('utf-8-sig')
+                
+                f = io.StringIO(content)
+                reader = csv.reader(f)
+                rows = list(reader)
+                
+                if not rows:
+                    continue
+                
+                # Capture header from the first successful file
+                if header is None:
+                    header = rows[0]
+                    merged_data.append(header)
+                
+                # Add data rows, skip header of subsequent files
+                data_rows = rows[1:] if header else rows
+                merged_data.extend(data_rows)
+                print(f"Added {len(data_rows)} rows from ROC {year}")
+
+            except Exception as download_error:
+                print(f"Failed to download year {year}: {download_error}")
+
+        if not merged_data:
+            print("No data collected to merge.")
+            return
 
         # Save merged data
         save_path = os.path.join(DATA_DIR, "holiday_data.csv")
@@ -83,11 +102,10 @@ def scrape_data():
             writer = csv.writer(f)
             writer.writerows(merged_data)
         
-        print(f"Successfully merged {len(merged_data) - 1} records into: {save_path}")
+        print(f"Success! Total records: {len(merged_data) - 1}. Saved to: {save_path}")
 
     except Exception as e:
-        print(f"Error during scraping: {e}")
+        print(f"Scraper error: {e}")
 
 if __name__ == "__main__":
-    import re # Ensure re is available inside the function scope if needed or imported globally
     scrape_data()
