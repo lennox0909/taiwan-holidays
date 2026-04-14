@@ -20,8 +20,10 @@ Since the data pages on data.gov.tw are often dynamically generated or contain m
 
 You need requests for sending HTTP requests and beautifulsoup4 for parsing HTML.
 
+```
 requests  
 beautifulsoup4
+```
 
 ## **Step 2: Write the Scraping Script scripts/scraper.py**
 
