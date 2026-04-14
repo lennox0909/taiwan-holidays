@@ -1,7 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import os
-import re
+import csv
+import io
 
 # Target dataset: Government Office Calendar (ID: 14718)
 DATASET_URL = "https://data.gov.tw/dataset/14718"
@@ -26,49 +27,67 @@ def scrape_data():
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Find all resource download links
-        # The site structure often lists different years as separate download nodes
-        download_links = []
+        # Dictionary to store found links per year to avoid duplicates
+        # Key: Year (int), Value: URL (str)
+        year_to_link = {}
+
+        # Scan for all CSV links
         for a_tag in soup.find_all('a', href=True):
             href = a_tag.get('href', '')
-            text = a_tag.get_text() + a_tag.get('title', '')
+            title = (a_tag.get('title', '') + a_tag.get_text()).strip()
             
-            # Check for CSV resources
-            if 'csv' in href.lower() or 'csv' in text.lower():
-                # Extract year from text if present to match the 106-115 range
-                # Or simply collect all CSV links if they are part of this dataset
-                download_links.append(href)
+            if 'csv' in href.lower() or 'csv' in title.lower():
+                # Extract ROC year from title using regex
+                match = re.search(r'(\d{3})', title)
+                if match:
+                    roc_year = int(match.group(1))
+                    if START_YEAR_ROC <= roc_year <= END_YEAR_ROC:
+                        year_to_link[roc_year] = href
 
-        if not download_links:
-            print("No CSV download links found.")
+        if not year_to_link:
+            print("No matching CSV resources found for the specified ROC years.")
+            # Fallback: just try to get the primary one if no year labels found
             return
 
-        # Removing duplicates while preserving order
-        unique_links = list(dict.fromkeys(download_links))
-        print(f"Found {len(unique_links)} potential CSV resources.")
+        print(f"Found resources for years: {sorted(year_to_link.keys())}")
 
-        # In this specific dataset (14718), usually the main CSV contains 
-        # multiple years or there is a primary 'history' file.
-        # We will download the first/primary valid CSV as holiday_data.csv.
-        # If the platform provides separate files per year, 
-        # the user might prefer individual files or a merged one.
-        # For now, we fetch the primary resource link.
-        
-        target_link = unique_links[0]
-        print(f"Downloading primary resource: {target_link}")
+        merged_data = []
+        header = None
 
-        file_res = requests.get(target_link, headers=headers)
-        file_res.raise_for_status()
+        # Download and merge each file
+        for year in sorted(year_to_link.keys()):
+            link = year_to_link[year]
+            print(f"Fetching data for year {year}...")
+            
+            file_res = requests.get(link, headers=headers)
+            file_res.encoding = 'utf-8-sig' # Handle BOM
+            
+            # Use csv module to parse content
+            f = io.StringIO(file_res.text)
+            reader = csv.reader(f)
+            rows = list(reader)
+            
+            if not rows:
+                continue
+                
+            if header is None:
+                header = rows[0]
+                merged_data.append(header)
+            
+            # Append data rows (skipping header of subsequent files)
+            merged_data.extend(rows[1:])
 
+        # Save merged data
         save_path = os.path.join(DATA_DIR, "holiday_data.csv")
-        with open(save_path, 'wb') as f:
-            f.write(file_res.content)
+        with open(save_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerows(merged_data)
         
-        print(f"Data successfully updated to: {save_path}")
-        print(f"Scope: Target range ROC {START_YEAR_ROC} to {END_YEAR_ROC} covered by dataset.")
+        print(f"Successfully merged {len(merged_data) - 1} records into: {save_path}")
 
     except Exception as e:
         print(f"Error during scraping: {e}")
 
 if __name__ == "__main__":
+    import re # Ensure re is available inside the function scope if needed or imported globally
     scrape_data()
