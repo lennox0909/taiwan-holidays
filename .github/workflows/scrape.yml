@@ -6,6 +6,10 @@ on:
     - cron: '0 0 1 * *'
   workflow_dispatch: # Allows manual trigger for testing
 
+env:
+  # Opt-in to Node.js 24 to resolve deprecation warnings for actions
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
