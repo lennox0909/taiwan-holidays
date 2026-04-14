@@ -54,7 +54,7 @@ If your application has high traffic, use a CDN like **jsDelivr** to serve the f
 
 If you enable **GitHub Pages** in your repository settings, the file will be accessible via your custom GitHub Pages domain:
 
-* **URL Format:** https://{username}.github.io/{repo}/data/holiday\_data.csv
+* **API URL:** [holiday_data.csv](https://lennox0909.github.io/taiwan-holidays/data/holiday_data.csv)
 
 ## **How to Get Started?**
 
