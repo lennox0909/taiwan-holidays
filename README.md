@@ -40,4 +40,4 @@ Set it to run automatically on the first day of every month.
 
 Once the workflow runs successfully, `holiday_data.csv` file is hosted on GitHub.
 - Access **API** with URL: [holiday_data.csv](https://lennox0909.github.io/taiwan-holidays/data/holiday_data.csv)
-
+- 「是否放假」欄位說明: `0` 表示該日要上班, `2` 表示該日放假
