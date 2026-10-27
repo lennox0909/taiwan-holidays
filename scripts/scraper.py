@@ -11,7 +11,7 @@ DATASET_URL = "https://data.gov.tw/dataset/14718"
 DATA_DIR = "data"
 # Target ROC years: 106 (2017) to 115 (2026)
 START_YEAR_ROC = 106
-END_YEAR_ROC = 115
+END_YEAR_ROC = 116
 
 def scrape_data():
     print(f"Scraping starts. Target: {DATASET_URL}")
